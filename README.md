@@ -15,7 +15,7 @@ AugHFL(Augmented Heterogeneous Federated Learning) is a federated learning frame
 
 # [Framework Architecture](#contents)
 
-![](C:\Users\PC\AppData\Roaming\marktext\images\2023-12-12-13-18-52-image.png)
+![](framework.png)
 
 # [Dataset](#contents)
 
@@ -64,7 +64,7 @@ python AugHFL/AugHFL.py
 
 In the heterogeneous model scenario, we assign four different networks:ResNet10,ResNet12,ShuffleNet,Mobilenetv2
 
-![](C:\Users\PC\AppData\Roaming\marktext\images\2023-12-12-13-12-42-image.png)
+![](methods_comparison.png)
 
 # [Citation](#contents)
 
