@@ -1,7 +1,7 @@
 import os
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1,2,3,4,5"
 import sys
 sys.path.append("..")
 from Dataset.utils import init_logs, get_dataloader, get_augmix_private_dataloader, get_augmixcorrupt_randompub_dataloader, init_nets, generate_public_data_indexs, mkdirs
@@ -17,6 +17,7 @@ import torch
 import torch.backends.cudnn
 import matplotlib.pyplot as plt
 from tensorboardX import SummaryWriter
+from Dataset.tinyimagenet_dataloader import get_augmix_tinyimagenet_dataloader
 
 '''
 Global Parameters
@@ -34,8 +35,8 @@ Pariticpant_Params = {
 }
 
 """Corruption Setting"""
-Corruption_Type = 'clean' #['clean', 'random_noise']
-Corrupt_rate = 0 #[0, 1, 0.5]
+Corruption_Type = 'random_noise' #['clean', 'random_noise']
+Corrupt_rate = 1 #[0, 1, 0.5]
 Test_Corruption_Type = 'random_noise' #['clean', 'random_noise']
 Test_Corrupt_rate = 1 #[0, 1]
 if Test_Corrupt_rate == 0:
@@ -50,14 +51,11 @@ Private_Nets_Name_List = ['ResNet10','ResNet12','ShuffleNet','Mobilenetv2']
 """Homogeneous Model Setting"""
 # Private_Nets_Name_List = ['ResNet12','ResNet12','ResNet12','ResNet12']
 """Dataset Setting"""
-if Corrupt_rate == 0:
-    Private_Dataset_Name = 'cifar10'
-    Private_Dataset_Dir = '../Dataset/cifar_10'
-else:
-    Private_Dataset_Name = 'cifar10c'
-    Private_Dataset_Dir = '../Dataset/cifar_10/CIFAR-10-C_train'
-Private_Data_Len = 10000
-Private_Dataset_Classes = ['plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck']
+Private_Dataset_Name = 'tinyimagenet'
+Private_Dataset_Dir = '../Dataset/tiny_imagenet'
+# Private_Data_Len = 10000
+Private_Data_Len = 25000
+Private_Dataset_Classes = [i for i in range(200)]
 Private_Output_Channel = len(Private_Dataset_Classes)
 """Public Dataset Setting"""
 Public_Dataset_Name = 'cifar100'
@@ -91,6 +89,8 @@ def update_model_via_private_data(network,private_epoch,private_dataloader,loss_
     if optimizer_method =='SGD':
         optimizer = optim.SGD(network.parameters(), lr=learing_rate, momentum=0.9, weight_decay=1e-4)
     participant_local_loss_batch_list = []
+    optimizer = torch.optim.Adam(network.parameters(), lr=0.001, weight_decay=2e-4)
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=32)
     for epoch_index in range(private_epoch):
         for batch_idx, (images, labels) in enumerate(private_dataloader):
             #Augmix+JSD
@@ -115,9 +115,10 @@ def update_model_via_private_data(network,private_epoch,private_dataloader,loss_
             participant_local_loss_batch_list.append(loss.item())
             loss.backward()
             optimizer.step()
+            scheduler.step()
             if epoch_index % 5 ==0:
                 logger.info('Private Train : [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                    batch_idx * len(images), len(private_dataloader.dataset),
+                    batch_idx * len(images[0]), len(private_dataloader.dataset),
                     100. * batch_idx / len(private_dataloader), loss.item()))
 
     return network,participant_local_loss_batch_list
@@ -135,7 +136,7 @@ if __name__ =='__main__':
         torch.cuda.manual_seed_all(seed)
     # os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
     # os.environ["CUDA_VISIBLE_DEVICES"] = "5,6"
-    device_ids = [0,1]
+    device_ids = [0,1,2,3,4]
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     torch.backends.cudnn.benchmark = False
     torch.backends.cudnn.deterministic = True
@@ -143,7 +144,7 @@ if __name__ =='__main__':
     logger.info("Initialize Participants' Data idxs and Model")
     net_dataidx_map = {}
     for index in range(N_Participants):
-        idxes = np.random.permutation(50000)
+        idxes = np.random.permutation(100000)
         idxes = idxes[0:Private_Data_Len]
         net_dataidx_map[index]= idxes
     logger.info(net_dataidx_map)
@@ -155,8 +156,12 @@ if __name__ =='__main__':
         network = net_list[i]
         network = nn.DataParallel(network, device_ids=device_ids).to(device)
         netname = Private_Nets_Name_List[i]
-        network.load_state_dict(torch.load('../Network/Model_Storage/' + Corruption_Type + '_' + str(Corrupt_rate)+ '_' + Pariticpant_Params['loss_funnction'] + '/' + netname + '_' +str(i)+'.ckpt'))
+        network.load_state_dict(torch.load('../Network/Model_Storage_tinyimagenet/' + Corruption_Type + '_' + str(Corrupt_rate)+ '_' + Pariticpant_Params['loss_funnction'] + '/' + netname + '_' +str(i)+'.ckpt'))
         # network.load_state_dict(torch.load('../Network/Model_Storage/' + Pariticpant_Params['loss_funnction'] + '/' + str(Noise_type) + str(Noise_rate)+ '/' + netname + '_' + str(i) + '.ckpt'))
+
+        # #For evaluate
+        # network.load_state_dict(torch.load('./test/Model_Storage_tinyimagenet/' + Corruption_Type + '_' + str(Corrupt_rate)+ '_CE/' + netname + '_' +str(i)+'.ckpt'))
+
 
     logger.info("Initialize Public Data Parameters")
     public_data_indexs = generate_public_data_indexs(dataset=Public_Dataset_Name,datadir=Public_Dataset_Dir,size=Public_Dataset_Length, noise_type=Noise_type, noise_rate=Noise_rate)
@@ -177,7 +182,7 @@ if __name__ =='__main__':
             netname = Private_Nets_Name_List[participant_index]
             private_dataset_dir = Private_Dataset_Dir
             # print(netname + '_' + Private_Dataset_Name + '_' + private_dataset_dir)
-            _, test_dl, _, _ = get_augmix_private_dataloader(dataset=Private_Dataset_Name, datadir=private_dataset_dir, train_bs=TrainBatchSize,
+            _, test_dl, _, _ = get_augmix_tinyimagenet_dataloader(dataset=Private_Dataset_Name, datadir=private_dataset_dir, train_bs=TrainBatchSize,
                                               test_bs=TestBatchSize, dataidxs=None,
                                               corrupt_type=Corruption_Type, corrupt_rate=Corrupt_rate,
                                               test_dataset=test_dataset, test_corruption_type=Test_Corruption_Type,
@@ -188,7 +193,7 @@ if __name__ =='__main__':
             acc_epoch_list.append(accuracy)
         acc_list.append(acc_epoch_list)
         accuracy_avg = sum(acc_epoch_list) / N_Participants
-
+        logger.info('Avg Accuracy:{}'.format(accuracy_avg))
 
         '''
         HHF
@@ -222,7 +227,7 @@ if __name__ =='__main__':
                 # participant_kl = 1 / (F.kl_div(p_mixture, p_clean, reduction='batchmean') +
                 #             F.kl_div(p_mixture, p_aug1, reduction='batchmean') +
                 #             F.kl_div(p_mixture, p_aug2, reduction='batchmean')) / 3.
-                participant_kl_list.append(participant_kl.clone().detach())
+                participant_kl_list.append(participant_kl.clone().detach().cpu())
 
             #归一化
             participant_weight_list = []
@@ -265,7 +270,7 @@ if __name__ =='__main__':
             network = nn.DataParallel(network, device_ids=device_ids).to(device)
             network.train()
             private_dataidx = net_dataidx_map[participant_index]
-            train_dl_local, _, train_ds_local, _ = get_augmix_private_dataloader(dataset=Private_Dataset_Name, datadir=Private_Dataset_Dir,
+            train_dl_local, _, train_ds_local, _ = get_augmix_tinyimagenet_dataloader(dataset=Private_Dataset_Name, datadir=Private_Dataset_Dir,
                                                                   train_bs=TrainBatchSize, test_bs=TestBatchSize,
                                                                   dataidxs=private_dataidx, corrupt_type=Corruption_Type,
                                                                   corrupt_rate=Corrupt_rate, test_dataset=test_dataset,
@@ -287,7 +292,7 @@ if __name__ =='__main__':
             acc_epoch_list = []
             logger.info('Final Evaluate Models')
             for participant_index in range(N_Participants):  # 改成2 拿来测试 N_Participants
-                _, test_dl, _, _ = get_augmix_private_dataloader(dataset=Private_Dataset_Name, datadir=Private_Dataset_Dir,
+                _, test_dl, _, _ = get_augmix_tinyimagenet_dataloader(dataset=Private_Dataset_Name, datadir=Private_Dataset_Dir,
                                                   train_bs=TrainBatchSize,
                                                   test_bs=TestBatchSize, dataidxs=None,
                                                   corrupt_type=Corruption_Type, corrupt_rate=Corrupt_rate,
@@ -299,10 +304,11 @@ if __name__ =='__main__':
                 acc_epoch_list.append(accuracy)
             acc_list.append(acc_epoch_list)
             accuracy_avg = sum(acc_epoch_list) / N_Participants
+            logger.info('Avg accuracy:{}'.format(accuracy_avg))
 
         if epoch_index % 5 == 0 or epoch_index==CommunicationEpoch-1:
             mkdirs('./test/Performance_Analysis/' + Corruption_Type + '_' + str(Corrupt_rate))
-            mkdirs('./test/Model_Storage/' + Corruption_Type + '_' + str(Corrupt_rate)+ '_' + Pariticpant_Params['loss_funnction'])
+            mkdirs('./test/Model_Storage_tinyimagenet/' + Corruption_Type + '_' + str(Corrupt_rate)+ '_' + Pariticpant_Params['loss_funnction'])
 
             logger.info('Save Loss')
             col_loss_array = np.array(col_loss_list)
@@ -322,7 +328,7 @@ if __name__ =='__main__':
                 network = net_list[participant_index]
                 network = nn.DataParallel(network, device_ids=device_ids).to(device)
                 torch.save(network.state_dict(),
-                           './test/Model_Storage/' + Corruption_Type + '_' + str(Corrupt_rate) + '_' + Pariticpant_Params['loss_funnction']+ '/' + netname + '_' +str(participant_index)+'.ckpt')
+                           './test/Model_Storage_tinyimagenet/' + Corruption_Type + '_' + str(Corrupt_rate) + '_' + Pariticpant_Params['loss_funnction']+ '/' + netname + '_' +str(participant_index)+'.ckpt')
 
         # if epoch_index % 5 == 0 or epoch_index==CommunicationEpoch-1:
         #     mkdirs('./test/Performance_Analysis/'+Pariticpant_Params['loss_funnction'])

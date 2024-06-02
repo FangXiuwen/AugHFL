@@ -8,7 +8,9 @@ import os
 import os.path
 import numpy as np
 import sys
+from typing import Optional
 from numpy.testing import assert_array_almost_equal
+from torchvision.datasets.utils import download_and_extract_archive
 
 if sys.version_info[0] == 2:
     import cPickle as pickle
@@ -16,6 +18,7 @@ else:
     import pickle
 
 import torch.utils.data as data
+from torch.utils.data import DataLoader, TensorDataset
 
 
 Seed = 0
@@ -376,7 +379,6 @@ class CIFAR100(data.Dataset):
         return fmt_str
 
 
-
 def check_integrity(fpath, md5):
     if not os.path.isfile(fpath):
         return False
@@ -503,4 +505,3 @@ def noisify(dataset='mnist', nb_classes=10, train_labels=None, noise_type=None, 
         train_noisy_labels = train_labels
         actual_noise_rate = 0
     return train_noisy_labels, actual_noise_rate
-

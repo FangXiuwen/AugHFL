@@ -48,6 +48,7 @@ def aug(image, preprocess):
   mixed = (1 - m) * preprocess(image) + m * mix
   return mixed
 
+
 class AugMixDataset(Dataset):
   """Dataset wrapper to perform AugMix augmentation."""
 
@@ -68,6 +69,7 @@ class AugMixDataset(Dataset):
   def __len__(self):
     return len(self.dataset)
 
+
 class AugMixPublicDataset(Dataset):
   """Dataset wrapper to perform AugMix augmentation."""
 
@@ -80,6 +82,10 @@ class AugMixPublicDataset(Dataset):
     x, y = self.dataset[i]
     if self.corrupt == 'fix':
       return aug(x, self.preprocess), y
+    elif self.corrupt == 'random':
+      im_tuple = (aug(x, self.preprocess), aug(x, self.preprocess),
+                  aug(x, self.preprocess), aug(x, self.preprocess))
+      return im_tuple, y
     elif self.corrupt == 'augmix':
       im_tuple1 = (self.preprocess(x), aug(x, self.preprocess),aug(x, self.preprocess))
       im_tuple2 = (self.preprocess(x), aug(x, self.preprocess),aug(x, self.preprocess))
@@ -87,7 +93,9 @@ class AugMixPublicDataset(Dataset):
       im_tuple4 = (self.preprocess(x), aug(x, self.preprocess),aug(x, self.preprocess))
       im_tuple = (im_tuple1, im_tuple2, im_tuple3, im_tuple4)
       return im_tuple, y
-
+    elif self.corrupt == 'fixaugmix':
+      im_tuple = (self.preprocess(x), aug(x, self.preprocess),aug(x, self.preprocess))
+      return im_tuple, y
 
   def __len__(self):
     return len(self.dataset)
