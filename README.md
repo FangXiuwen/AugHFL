@@ -27,9 +27,10 @@ Note: Cifar-10-C can be genearetd by make_cifar_c.py. Data will be processed in 
 
 # [Quick Start](#contents)
 
-After installing MindSpore via the official website, you can start training and evaluation as follows:
+You can start training and evaluation as follows:
 
 ```bash
+pip install -r requirements.txt
 # init public data and local data
 python Dataset/init_data.py
 # pretrain local models
