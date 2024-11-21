@@ -23,7 +23,7 @@ Our experiments are conducted on two datasets, Cifar-10-C and Cifar-100. We set 
 
 Dataset used: [CIFAR-10-C](https://zenodo.org/records/2535967)、[CIFAR-100](http://www.cs.toronto.edu/~kriz/cifar.html)
 
-Note: Data will be processed in init_data.py
+Note: Cifar-10-C can be genearetd by make_cifar_c.py. Data will be processed in init_data.py.
 
 # [Quick Start](#contents)
 
