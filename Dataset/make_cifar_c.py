@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 
 import os
+import sys
+sys.path.append("..")
 from PIL import Image
 import os.path
 import time
@@ -10,6 +12,7 @@ import torchvision.transforms as trn
 import torch.utils.data as data
 import numpy as np
 import random
+from utils import mkdirs
 
 from PIL import Image
 
@@ -450,47 +453,88 @@ d['JPEG'] = jpeg_compression
 # test_data = dset.CIFAR10('/share/data/vision-greg/cifarpy', train=False)
 # convert_img = trn.Compose([trn.ToTensor(), trn.ToPILImage()])
 
-# """
-# Train CIFAR10 dataset corruption
-# """
-# print('Using CIFAR-10 data')
-# train_data = dset.CIFAR10('../Dataset/cifar_10', train=True)
-# convert_img = trn.Compose([trn.ToTensor(), trn.ToPILImage()])
-
-# # for method_name in d.keys():
-# print('Creating images for the corruption.')
-# cifar_c, labels = [], []
-
-# for img, label in zip(train_data.data, train_data.targets):
-#     method_name = random.sample(d.keys(), 1)[0]
-
-#     # for severity in range(1,6):
-#     severity = np.random.randint(1, 5)
-#     corruption = lambda clean_img: d[method_name](clean_img, severity)
-
-#     labels.append(label)
-#     cifar_c.append(np.uint8(corruption(convert_img(img))))
-# np.save('../Dataset/cifar_10/CIFAR-10-C_train/random_noise.npy', np.array(cifar_c).astype(np.uint8))
-# # np.save('../Dataset/cifar_100/CIFAR-10-C_train/labels.npy', np.array(labels).astype(np.uint8))
-
 """
-Train CIFAR10 dataset corruption 0.5
+Train CIFAR10 dataset corruption
 """
+mkdirs('../Dataset/cifar_10/CIFAR-10-C_train')
 print('Using CIFAR-10 data')
 train_data = dset.CIFAR10('../Dataset/cifar_10', train=True)
 convert_img = trn.Compose([trn.ToTensor(), trn.ToPILImage()])
 
-corruption_rate = 0.2
-print('Corruption rate:', corruption_rate)
-idxes = np.random.permutation(50000)
-corruption_data_len = int(corruption_rate * 50000)
-idxes = idxes[0:corruption_data_len]
+corruption_rate_list = [0, 0.5, 1]
+for corruption_rate in corruption_rate_list:
+    print('Corruption rate:', corruption_rate)
+    idxes = np.random.permutation(50000)
+    corruption_data_len = int(corruption_rate * 50000)
+    idxes = idxes[0:corruption_data_len]
+
+    # for method_name in d.keys():
+    print('Creating images for the ' + str(corruption_rate) + ' corruption.')
+    cifar_c, labels = [], []
+
+    for index, (img, label) in enumerate(zip(train_data.data, train_data.targets)):
+        method_name = random.sample(d.keys(), 1)[0]
+
+        # for severity in range(1,6):
+        severity = np.random.randint(1, 5)
+        corruption = lambda clean_img: d[method_name](clean_img, severity)
+
+        labels.append(label)
+        if index in idxes:
+            cifar_c.append(np.uint8(corruption(convert_img(img))))
+        else:
+            cifar_c.append(img)
+    np.save('../Dataset/cifar_10/CIFAR-10-C_train/random_noise_'+str(corruption_rate)+'.npy', np.array(cifar_c).astype(np.uint8))
+    np.save('../Dataset/cifar_10/CIFAR-10-C_train/labels.npy', np.array(labels).astype(np.uint8))
+    print('Finish.')
+
+
+"""
+Test dataset corruption
+"""
+mkdirs('../Dataset/cifar_10/CIFAR-10-C_test')
+print('Using CIFAR-10 test data')
+train_data = dset.CIFAR10('../Dataset/cifar_10', train=False)
+convert_img = trn.Compose([trn.ToTensor(), trn.ToPILImage()])
+
+corruption_rate_list = [0, 1]
+for corruption_rate in corruption_rate_list:
+    print('Corruption rate:', corruption_rate)
+    idxes = np.random.permutation(50000)
+    corruption_data_len = int(corruption_rate * 50000)
+    idxes = idxes[0:corruption_data_len]
+
+    # for method_name in d.keys():
+    print('Creating images for the ' + str(corruption_rate) + ' corruption.')
+    cifar_c, labels = [], []
+
+    for index, (img, label) in enumerate(zip(train_data.data, train_data.targets)):
+        method_name = random.sample(d.keys(), 1)[0]
+
+        # for severity in range(1,6):
+        severity = np.random.randint(1, 5)
+        corruption = lambda clean_img: d[method_name](clean_img, severity)
+
+        labels.append(label)
+        if index in idxes:
+            cifar_c.append(np.uint8(corruption(convert_img(img))))
+        else:
+            cifar_c.append(img)
+    np.save('../Dataset/cifar_10/CIFAR-10-C_test/random_noise_'+str(corruption_rate)+'.npy', np.array(cifar_c).astype(np.uint8))
+    np.save('../Dataset/cifar_10/CIFAR-10-C_test/labels.npy', np.array(labels).astype(np.uint8))
+
+"""
+Train CIFAR100 dataset corruption
+"""
+print('Using CIFAR-100 data')
+train_data = dset.CIFAR100('../Dataset/cifar_100', train=True)
+convert_img = trn.Compose([trn.ToTensor(), trn.ToPILImage()])
 
 # for method_name in d.keys():
 print('Creating images for the corruption.')
 cifar_c, labels = [], []
 
-for index, (img, label) in enumerate(zip(train_data.data, train_data.targets)):
+for img, label in zip(train_data.data, train_data.targets):
     method_name = random.sample(d.keys(), 1)[0]
 
     # for severity in range(1,6):
@@ -498,56 +542,6 @@ for index, (img, label) in enumerate(zip(train_data.data, train_data.targets)):
     corruption = lambda clean_img: d[method_name](clean_img, severity)
 
     labels.append(label)
-    if index in idxes:
-        cifar_c.append(np.uint8(corruption(convert_img(img))))
-    else:
-        cifar_c.append(img)
-np.save('../Dataset/cifar_10/CIFAR-10-C_train/random_noise_0.2.npy', np.array(cifar_c).astype(np.uint8))
-# np.save('../Dataset/cifar_100/CIFAR-10-C_train/labels.npy', np.array(labels).astype(np.uint8))
-
-# """
-# Train CIFAR100 dataset corruption
-# """
-# print('Using CIFAR-100 data')
-# train_data = dset.CIFAR100('../Dataset/cifar_100', train=True)
-# convert_img = trn.Compose([trn.ToTensor(), trn.ToPILImage()])
-
-# # for method_name in d.keys():
-# print('Creating images for the corruption.')
-# cifar_c, labels = [], []
-
-# for img, label in zip(train_data.data, train_data.targets):
-#     method_name = random.sample(d.keys(), 1)[0]
-
-#     # for severity in range(1,6):
-#     severity = np.random.randint(1, 5)
-#     corruption = lambda clean_img: d[method_name](clean_img, severity)
-
-#     labels.append(label)
-#     cifar_c.append(np.uint8(corruption(convert_img(img))))
-# np.save('../Dataset/cifar_100/CIFAR-100-C_train/random_noise_' + str(seed) + '.npy', np.array(cifar_c).astype(np.uint8))
-# # np.save('../Dataset/cifar_100/CIFAR-100-C_train/labels.npy', np.array(labels).astype(np.uint8))
-
-
-
-# """
-# Test dataset corruption
-# """
-# test_data = dset.CIFAR10('../Dataset/cifar_10', train=False)
-# convert_img = trn.Compose([trn.ToTensor(), trn.ToPILImage()])
-#
-# # for method_name in d.keys():
-# print('Creating images for the corruption.')
-# cifar_c, labels = [], []
-#
-# for img, label in zip(test_data.data, test_data.targets):
-#     method_name = random.sample(d.keys(), 1)[0]
-#
-#     # for severity in range(1,6):
-#     severity = np.random.randint(1, 5)
-#     corruption = lambda clean_img: d[method_name](clean_img, severity)
-#
-#     labels.append(label)
-#     cifar_c.append(np.uint8(corruption(convert_img(img))))
-# np.save('../Dataset/cifar_10/CIFAR-10-C_test/random_noise.npy', np.array(cifar_c).astype(np.uint8))
-
+    cifar_c.append(np.uint8(corruption(convert_img(img))))
+np.save('../Dataset/cifar_100/CIFAR-100-C_train/random_noise_1.npy', np.array(cifar_c).astype(np.uint8))
+np.save('../Dataset/cifar_100/CIFAR-100-C_train/labels.npy', np.array(labels).astype(np.uint8))

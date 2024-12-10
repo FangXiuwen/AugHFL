@@ -31,12 +31,16 @@ You can start training and evaluation as follows:
 
 ```bash
 pip install -r requirements.txt
+# Download the cifar10 and cifar100 datasets to cifar_10 and cifar_100 folders in Dataset
 # init public data and local data
-python Dataset/init_data.py
+cd Dataset
+python make_cifar_c.py
 # pretrain local models
-python Network/pretrain.py
+cd Network
+python pretrain.py
 # AugHFL
-python AugHFL/AugHFL.py
+cd HHF
+python AugHFL.py
 ```
 
 # [Script and Sample Code](#contents)
@@ -44,21 +48,25 @@ python AugHFL/AugHFL.py
 ```bash
 ├── Robust_FL
     ├── Dataset
+        ├── __init__.py
         ├── augmentations.py
         ├── cifar.py
         ├── dataaug.py
         ├── init_dataset.py
+        ├── make_cifar_c.py
         ├── utils.py
+        ├── visual_test.py
     ├── Network
         ├── Models_Def
             ├── mobilnet_v2.py
             ├── resnet.py
             ├── shufflenet.py
         ├── pretrain.py
-    ├── AugHFL
+    ├── HHF
         ├── AugHFL.py
     ├── loss.py
     ├── README.md
+    ├── requirements.txt
 ```
 
 # [Comparison with the SOTA methods](#contents)

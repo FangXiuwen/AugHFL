@@ -88,7 +88,7 @@ def generate_public_data_indexs(dataset,datadir,size, noise_type=None, noise_rat
     idxs = idxs[0:size]
     return idxs
 
-def get_dataloader(dataset, datadir, train_bs, test_bs, dataidxs=None, noise_level=0, corrupt_type=None, corrupt_rate=0, test_dataset=None, test_corruption_type=None, test_corrupt_rate=0):
+def get_dataloader(dataset, datadir, train_bs, test_bs, dataidxs=None, noise_level=0, corrupt_type=None, corrupt_rate=0, test_dataset=None, test_corrupt_rate=0):
     #For the train dataset:
     if dataset == 'cifar10':
         dl_obj = Cifar10FL
@@ -107,11 +107,7 @@ def get_dataloader(dataset, datadir, train_bs, test_bs, dataidxs=None, noise_lev
             transforms.ToTensor(),
             normalize
         ])
-        preprocess = transforms.Compose(
-            [transforms.ToTensor(),
-             transforms.Normalize([0.5] * 3, [0.5] * 3)])
         train_ds = dl_obj(datadir, dataidxs=dataidxs, train=True, transform=transform_train, download=False)
-        # train_ds = AugMixDataset(train_ds, preprocess, no_jsd=False)
 
     if dataset =='cifar100':
         dl_obj=Cifar100FL
@@ -135,38 +131,7 @@ def get_dataloader(dataset, datadir, train_bs, test_bs, dataidxs=None, noise_lev
             transforms.ToTensor(),
             normalize_train
         ])
-        #Augmix transform
-        # transform_train = transforms.Compose([
-        #     transforms.ToTensor(),
-        #     transforms.Lambda(lambda x: F.pad(
-        #         Variable(x.unsqueeze(0), requires_grad=False),
-        #         (4, 4, 4, 4), mode='reflect').data.squeeze()),
-        #     transforms.ToPILImage(),
-        #     transforms.ColorJitter(brightness=noise_level),
-        #     transforms.RandomCrop(32),
-        #     transforms.RandomHorizontalFlip()
-        # ])
-        preprocess = transforms.Compose(
-            [transforms.ToTensor(),
-             transforms.Normalize([0.5] * 3, [0.5] * 3)])
         train_ds = dl_obj(datadir, dataidxs=dataidxs, c_type=corrupt_type, transform=transform_train, corrupt_rate=corrupt_rate)
-        # train_ds = AugMixDataset(train_ds, preprocess, no_jsd=False)
-
-    if dataset == 'tinyimagenet':
-        normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-        transform_train = transforms.Compose([
-            transforms.RandomCrop(32, padding=4),
-            transforms.RandomHorizontalFlip(),
-            transforms.RandomRotation(15),
-            transforms.ToTensor(),
-            normalize
-        ])
-        if dataidxs is None:
-            train_ds = datasets.ImageFolder(datadir+'/train', transform=transform_train)
-        else:
-            train_ds = datasets.ImageFolder(datadir+'/train', transform=transform_train)
-            train_ds = torch.utils.data.Subset(train_ds, dataidxs)
-
 
     # For the test dataset:
     if test_dataset == 'clean':
@@ -186,7 +151,7 @@ def get_dataloader(dataset, datadir, train_bs, test_bs, dataidxs=None, noise_lev
             transforms.ToTensor(),
             normalize_test
         ])
-        test_ds = CIFAR_C(test_datadir, c_type=test_corruption_type, transform=transform_test, corrupt_rate=test_corrupt_rate)
+        test_ds = CIFAR_C(test_datadir, transform=transform_test, corrupt_rate=test_corrupt_rate)
 
 
     train_dl = data.DataLoader(dataset=train_ds, batch_size=train_bs, drop_last=True, shuffle=True)
@@ -194,7 +159,7 @@ def get_dataloader(dataset, datadir, train_bs, test_bs, dataidxs=None, noise_lev
 
     return train_dl, test_dl, train_ds, test_ds
 
-def get_augmix_private_dataloader(dataset, datadir, train_bs, test_bs, dataidxs=None, noise_level=0, corrupt_type=None, corrupt_rate=0, test_dataset=None, test_corruption_type=None, test_corrupt_rate=0):
+def get_augmix_private_dataloader(dataset, datadir, train_bs, test_bs, dataidxs=None, noise_level=0, corrupt_type=None, corrupt_rate=0, test_dataset=None, test_corrupt_rate=0):
     #For the train dataset:
     if dataset == 'cifar10':
         dl_obj = Cifar10FL
@@ -276,152 +241,14 @@ def get_augmix_private_dataloader(dataset, datadir, train_bs, test_bs, dataidxs=
             transforms.ToTensor(),
             normalize_test
         ])
-        test_ds = CIFAR_C(test_datadir, c_type=test_corruption_type, transform=transform_test, corrupt_rate=test_corrupt_rate)
+        test_ds = CIFAR_C(test_datadir, transform=transform_test, corrupt_rate=test_corrupt_rate)
 
     train_dl = data.DataLoader(dataset=train_ds, batch_size=train_bs, drop_last=True, shuffle=True, num_workers=8)
     test_dl = data.DataLoader(dataset=test_ds, batch_size=test_bs, drop_last=True, shuffle=False)
 
     return train_dl, test_dl, train_ds, test_ds
 
-def get_fixedcorrupt_pub_dataloader(dataset, datadir, train_bs, test_bs, dataidxs=None, test_dataset=None, test_corruption_type=None, test_corrupt_rate=0):
-    #For the train dataset:
-    if dataset =='cifar100':
-        #augmix cifar100
-        dl_obj = Cifar100FL
-        normalize = transforms.Normalize(mean=[0.5070751592371323, 0.48654887331495095, 0.4409178433670343],
-                                         std=[0.2673342858792401, 0.2564384629170883, 0.27615047132568404])
-        transform_train = transforms.Compose([
-            transforms.ToPILImage(),
-            transforms.RandomCrop(32, padding=4),
-            transforms.RandomHorizontalFlip(),
-            transforms.RandomRotation(15),
-            # transforms.ToTensor(),
-            # normalize
-        ])
-        preprocess = transforms.Compose(
-            [transforms.ToTensor(),
-             transforms.Normalize([0.5] * 3, [0.5] * 3)])
-        train_ds = dl_obj(datadir, dataidxs=dataidxs, train=True, transform=transform_train, download=False)
-        train_ds = AugMixPublicDataset(train_ds, preprocess, corrupt='fix')
-
-    # For the test dataset:
-    if test_dataset == 'clean':
-        test_datadir = '../Dataset/cifar_10'
-        normalize_test = transforms.Normalize(mean=[x / 255.0 for x in [125.3, 123.0, 113.9]],
-                                              std=[x / 255.0 for x in [63.0, 62.1, 66.7]])
-        transform_test = transforms.Compose([
-            transforms.ToTensor(),
-            normalize_test
-        ])
-        test_ds = Cifar10FL(test_datadir, train=False, transform=transform_test, download=False)
-    elif test_dataset == 'corrupt':
-        test_datadir = '../Dataset/cifar_10/CIFAR-10-C_test'
-        normalize_test = transforms.Normalize(mean=[0.4914, 0.4822, 0.4465],
-                                         std=[0.2023, 0.1944, 0.2010])
-        transform_test = transforms.Compose([
-            transforms.ToTensor(),
-            normalize_test
-        ])
-        test_ds = CIFAR_C(test_datadir, c_type=test_corruption_type, transform=transform_test, corrupt_rate=test_corrupt_rate)
-
-    train_dl = data.DataLoader(dataset=train_ds, batch_size=train_bs, drop_last=True, shuffle=True)
-    test_dl = data.DataLoader(dataset=test_ds, batch_size=test_bs, drop_last=True, shuffle=False)
-
-    return train_dl, test_dl, train_ds, test_ds
-
-def get_randomcorrupt_pub_dataloader(dataset, datadir, train_bs, test_bs, dataidxs=None, test_dataset=None, test_corruption_type=None, test_corrupt_rate=0):
-    #For the train dataset:
-    if dataset =='cifar100':
-        #augmix cifar100
-        dl_obj = Cifar100FL
-        normalize = transforms.Normalize(mean=[0.5070751592371323, 0.48654887331495095, 0.4409178433670343],
-                                         std=[0.2673342858792401, 0.2564384629170883, 0.27615047132568404])
-        transform_train = transforms.Compose([
-            transforms.ToPILImage(),
-            transforms.RandomCrop(32, padding=4),
-            transforms.RandomHorizontalFlip(),
-            transforms.RandomRotation(15),
-            # transforms.ToTensor(),
-            # normalize
-        ])
-        preprocess = transforms.Compose(
-            [transforms.ToTensor(),
-             transforms.Normalize([0.5] * 3, [0.5] * 3)])
-        train_ds = dl_obj(datadir, dataidxs=dataidxs, train=True, transform=transform_train, download=False)
-        train_ds = AugMixPublicDataset(train_ds, preprocess, corrupt='random')
-
-    # For the test dataset:
-    if test_dataset == 'clean':
-        test_datadir = '../Dataset/cifar_10'
-        normalize_test = transforms.Normalize(mean=[x / 255.0 for x in [125.3, 123.0, 113.9]],
-                                              std=[x / 255.0 for x in [63.0, 62.1, 66.7]])
-        transform_test = transforms.Compose([
-            transforms.ToTensor(),
-            normalize_test
-        ])
-        test_ds = Cifar10FL(test_datadir, train=False, transform=transform_test, download=False)
-    elif test_dataset == 'corrupt':
-        test_datadir = '../Dataset/cifar_10/CIFAR-10-C_test'
-        normalize_test = transforms.Normalize(mean=[0.4914, 0.4822, 0.4465],
-                                         std=[0.2023, 0.1944, 0.2010])
-        transform_test = transforms.Compose([
-            transforms.ToTensor(),
-            normalize_test
-        ])
-        test_ds = CIFAR_C(test_datadir, c_type=test_corruption_type, transform=transform_test, corrupt_rate=test_corrupt_rate)
-
-    train_dl = data.DataLoader(dataset=train_ds, batch_size=train_bs, drop_last=True, shuffle=True)
-    test_dl = data.DataLoader(dataset=test_ds, batch_size=test_bs, drop_last=True, shuffle=False)
-
-    return train_dl, test_dl, train_ds, test_ds
-
-def get_augmixcorrupt_pub_dataloader(dataset, datadir, train_bs, test_bs, dataidxs=None, test_dataset=None, test_corruption_type=None, test_corrupt_rate=0):
-    #For the train dataset:
-    if dataset =='cifar100':
-        # clean cifar100
-        dl_obj=Cifar100FL
-        normalize = transforms.Normalize(mean=[0.5070751592371323, 0.48654887331495095, 0.4409178433670343],
-                                         std=[0.2673342858792401, 0.2564384629170883, 0.27615047132568404])
-        transform_train = transforms.Compose([
-            transforms.ToPILImage(),
-            transforms.RandomCrop(32, padding=4),
-            transforms.RandomHorizontalFlip(),
-            transforms.RandomRotation(15),
-            # transforms.ToTensor(),
-            # normalize
-        ])
-        preprocess = transforms.Compose(
-            [transforms.ToTensor(),
-             transforms.Normalize([0.5] * 3, [0.5] * 3)])
-        train_ds = dl_obj(datadir, dataidxs=dataidxs, train=True, transform=transform_train, download=False)
-        train_ds = AugMixPublicDataset(train_ds, preprocess, corrupt='augmix')
-
-    # For the test dataset:
-    if test_dataset == 'clean':
-        test_datadir = '../Dataset/cifar_10'
-        normalize_test = transforms.Normalize(mean=[x / 255.0 for x in [125.3, 123.0, 113.9]],
-                                              std=[x / 255.0 for x in [63.0, 62.1, 66.7]])
-        transform_test = transforms.Compose([
-            transforms.ToTensor(),
-            normalize_test
-        ])
-        test_ds = Cifar10FL(test_datadir, train=False, transform=transform_test, download=False)
-    elif test_dataset == 'corrupt':
-        test_datadir = '../Dataset/cifar_10/CIFAR-10-C_test'
-        normalize_test = transforms.Normalize(mean=[0.4914, 0.4822, 0.4465],
-                                         std=[0.2023, 0.1944, 0.2010])
-        transform_test = transforms.Compose([
-            transforms.ToTensor(),
-            normalize_test
-        ])
-        test_ds = CIFAR_C(test_datadir, c_type=test_corruption_type, transform=transform_test, corrupt_rate=test_corrupt_rate)
-
-    train_dl = data.DataLoader(dataset=train_ds, batch_size=train_bs, drop_last=True, shuffle=True)
-    test_dl = data.DataLoader(dataset=test_ds, batch_size=test_bs, drop_last=True, shuffle=False)
-
-    return train_dl, test_dl, train_ds, test_ds
-
-def get_augmixcorrupt_randompub_dataloader(dataset, datadir, train_bs, test_bs, dataidxs=None, test_dataset=None, test_corruption_type=None, test_corrupt_rate=0):
+def get_augmixcorrupt_randompub_dataloader(dataset, datadir, train_bs, test_bs, dataidxs=None, test_dataset=None, test_corrupt_rate=0):
     #For the train dataset:
     if dataset =='cifar100':
         # corrupt cifar100
@@ -439,7 +266,7 @@ def get_augmixcorrupt_randompub_dataloader(dataset, datadir, train_bs, test_bs, 
         preprocess = transforms.Compose(
             [transforms.ToTensor(),
              transforms.Normalize([0.5] * 3, [0.5] * 3)])
-        train_ds = dl_obj(datadir, dataidxs=dataidxs, c_type='random_noise', transform=transform_train, corrupt_rate=1)
+        train_ds = dl_obj(datadir, dataidxs=dataidxs, transform=transform_train, corrupt_rate=1)
         train_ds = AugMixPublicDataset(train_ds, preprocess, corrupt='augmix')
 
     # For the test dataset:
@@ -460,53 +287,7 @@ def get_augmixcorrupt_randompub_dataloader(dataset, datadir, train_bs, test_bs, 
             transforms.ToTensor(),
             normalize_test
         ])
-        test_ds = CIFAR_C(test_datadir, c_type=test_corruption_type, transform=transform_test, corrupt_rate=test_corrupt_rate)
-
-    train_dl = data.DataLoader(dataset=train_ds, batch_size=train_bs, drop_last=True, shuffle=True)
-    test_dl = data.DataLoader(dataset=test_ds, batch_size=test_bs, drop_last=True, shuffle=False)
-
-    return train_dl, test_dl, train_ds, test_ds
-
-def get_fixaugmix_pub_dataloader(dataset, datadir, train_bs, test_bs, dataidxs=None, test_dataset=None, test_corruption_type=None, test_corrupt_rate=0):
-    #For the train dataset:
-    if dataset =='cifar100':
-        # clean cifar100
-        dl_obj=Cifar100FL
-        normalize = transforms.Normalize(mean=[0.5070751592371323, 0.48654887331495095, 0.4409178433670343],
-                                         std=[0.2673342858792401, 0.2564384629170883, 0.27615047132568404])
-        transform_train = transforms.Compose([
-            transforms.ToPILImage(),
-            transforms.RandomCrop(32, padding=4),
-            transforms.RandomHorizontalFlip(),
-            transforms.RandomRotation(15),
-            # transforms.ToTensor(),
-            # normalize
-        ])
-        preprocess = transforms.Compose(
-            [transforms.ToTensor(),
-             transforms.Normalize([0.5] * 3, [0.5] * 3)])
-        train_ds = dl_obj(datadir, dataidxs=dataidxs, train=True, transform=transform_train, download=False)
-        train_ds = AugMixPublicDataset(train_ds, preprocess, corrupt='fixaugmix')
-
-    # For the test dataset:
-    if test_dataset == 'clean':
-        test_datadir = '../Dataset/cifar_10'
-        normalize_test = transforms.Normalize(mean=[x / 255.0 for x in [125.3, 123.0, 113.9]],
-                                              std=[x / 255.0 for x in [63.0, 62.1, 66.7]])
-        transform_test = transforms.Compose([
-            transforms.ToTensor(),
-            normalize_test
-        ])
-        test_ds = Cifar10FL(test_datadir, train=False, transform=transform_test, download=False)
-    elif test_dataset == 'corrupt':
-        test_datadir = '../Dataset/cifar_10/CIFAR-10-C_test'
-        normalize_test = transforms.Normalize(mean=[0.4914, 0.4822, 0.4465],
-                                         std=[0.2023, 0.1944, 0.2010])
-        transform_test = transforms.Compose([
-            transforms.ToTensor(),
-            normalize_test
-        ])
-        test_ds = CIFAR_C(test_datadir, c_type=test_corruption_type, transform=transform_test, corrupt_rate=test_corrupt_rate)
+        test_ds = CIFAR_C(test_datadir, transform=transform_test, corrupt_rate=test_corrupt_rate)
 
     train_dl = data.DataLoader(dataset=train_ds, batch_size=train_bs, drop_last=True, shuffle=True)
     test_dl = data.DataLoader(dataset=test_ds, batch_size=test_bs, drop_last=True, shuffle=False)

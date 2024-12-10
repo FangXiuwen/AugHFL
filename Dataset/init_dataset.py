@@ -45,10 +45,9 @@ class CIFAR10_C_origin(Dataset):
         return (img, label)
 
 class CIFAR_C(Dataset):
-    def __init__(self, path, dataidxs=None, c_type=None, transform=None, corrupt_rate=0):
+    def __init__(self, path, dataidxs=None, transform=None, corrupt_rate=0):
         self.dataidxs = dataidxs
-        if c_type == 'random_noise':
-            images = np.load(os.path.join(path, "{}_{}.npy".format(c_type, corrupt_rate)))
+        images = np.load(os.path.join(path, "random_noise_{}.npy".format(corrupt_rate)))
         labels = np.load(os.path.join(path, "labels.npy"))
 
         # concat_images = np.empty(shape=(1, 32, 32, 3))

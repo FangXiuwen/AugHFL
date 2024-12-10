@@ -48,7 +48,7 @@ class Bottleneck(nn.Module):
 
 
 class ShuffleNet(nn.Module):
-    def __init__(self, cfg):
+    def __init__(self, cfg, num_classes=10):
         super(ShuffleNet, self).__init__()
         out_planes = cfg['out_planes']
         num_blocks = cfg['num_blocks']
@@ -60,7 +60,7 @@ class ShuffleNet(nn.Module):
         self.layer1 = self._make_layer(out_planes[0], num_blocks[0], groups)
         self.layer2 = self._make_layer(out_planes[1], num_blocks[1], groups)
         self.layer3 = self._make_layer(out_planes[2], num_blocks[2], groups)
-        self.linear = nn.Linear(out_planes[2], 10)
+        self.linear = nn.Linear(out_planes[2], num_classes)
 
         # projector 2 layer
         sizes = [out_planes[2],1024,1024,1024]
@@ -100,13 +100,14 @@ class ShuffleNet(nn.Module):
         return linear_output, embedding_output
 
 
-def ShuffleNetG2():
+def ShuffleNetG2(num_classes = 10):
     cfg = {
         'out_planes': [200,400,800],
         'num_blocks': [4,8,4],
         'groups': 2
     }
-    return ShuffleNet(cfg)
+    num_classes = num_classes
+    return ShuffleNet(cfg, num_classes)
 
 def ShuffleNetG3():
     cfg = {

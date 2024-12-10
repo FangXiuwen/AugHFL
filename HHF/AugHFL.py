@@ -1,11 +1,10 @@
 import os
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "4,5,6,7"
 import sys
 sys.path.append("..")
-from Dataset.utils import init_logs, get_dataloader, get_augmix_private_dataloader, get_augmixcorrupt_randompub_dataloader, init_nets, generate_public_data_indexs, mkdirs
-from loss import SCELoss
+from Dataset.utils import init_logs, get_augmix_private_dataloader, get_augmixcorrupt_randompub_dataloader, init_nets, generate_public_data_indexs, mkdirs
 import torch.nn.functional as F
 import torch.optim as optim
 from random import sample
@@ -34,17 +33,13 @@ Pariticpant_Params = {
 }
 
 """Corruption Setting"""
-Corruption_Type = 'clean' #['clean', 'random_noise']
+Corruption_Type = 'random_noise' #['random_noise']
 Corrupt_rate = 0 #[0, 1, 0.5]
-Test_Corruption_Type = 'random_noise' #['clean', 'random_noise']
 Test_Corrupt_rate = 1 #[0, 1]
 if Test_Corrupt_rate == 0:
     test_dataset = 'clean'
 else:
     test_dataset = 'corrupt'
-"""Noise Setting"""
-Noise_type = None #['pairflip','symmetric',None]
-Noise_rate = 0
 """Heterogeneous Model Setting"""
 Private_Nets_Name_List = ['ResNet10','ResNet12','ShuffleNet','Mobilenetv2']
 """Homogeneous Model Setting"""
@@ -83,8 +78,6 @@ def evaluate_network(network,dataloader,logger):
 def update_model_via_private_data(network,private_epoch,private_dataloader,loss_function,optimizer_method,learing_rate,logger):
     if loss_function =='CE':
         criterion = nn.CrossEntropyLoss()
-    if loss_function =='SCE':
-        criterion = SCELoss(alpha=0.1, beta=1.0, num_classes=10)
 
     if optimizer_method =='Adam':
         optimizer = optim.Adam(network.parameters(),lr=learing_rate)
@@ -133,9 +126,7 @@ if __name__ =='__main__':
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
-    # os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-    # os.environ["CUDA_VISIBLE_DEVICES"] = "5,6"
-    device_ids = [0,1]
+    device_ids = [0,1,2,3]
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     torch.backends.cudnn.benchmark = False
     torch.backends.cudnn.deterministic = True
@@ -159,11 +150,10 @@ if __name__ =='__main__':
         # network.load_state_dict(torch.load('../Network/Model_Storage/' + Pariticpant_Params['loss_funnction'] + '/' + str(Noise_type) + str(Noise_rate)+ '/' + netname + '_' + str(i) + '.ckpt'))
 
     logger.info("Initialize Public Data Parameters")
-    public_data_indexs = generate_public_data_indexs(dataset=Public_Dataset_Name,datadir=Public_Dataset_Dir,size=Public_Dataset_Length, noise_type=Noise_type, noise_rate=Noise_rate)
+    public_data_indexs = generate_public_data_indexs(dataset=Public_Dataset_Name,datadir=Public_Dataset_Dir,size=Public_Dataset_Length)
     public_train_dl, _, public_train_ds, _ = get_augmixcorrupt_randompub_dataloader(dataset=Public_Dataset_Name,datadir=Public_Dataset_Dir,
                                                                           train_bs=TrainBatchSize,test_bs=TestBatchSize,dataidxs=public_data_indexs,
-                                                                          test_dataset=test_dataset, test_corruption_type=Test_Corruption_Type,
-                                                                          test_corrupt_rate=Test_Corrupt_rate)
+                                                                          test_dataset=test_dataset, test_corrupt_rate=Test_Corrupt_rate)
 
     col_loss_list = []
     local_loss_list = []
@@ -180,8 +170,7 @@ if __name__ =='__main__':
             _, test_dl, _, _ = get_augmix_private_dataloader(dataset=Private_Dataset_Name, datadir=private_dataset_dir, train_bs=TrainBatchSize,
                                               test_bs=TestBatchSize, dataidxs=None,
                                               corrupt_type=Corruption_Type, corrupt_rate=Corrupt_rate,
-                                              test_dataset=test_dataset, test_corruption_type=Test_Corruption_Type,
-                                              test_corrupt_rate=Test_Corrupt_rate)
+                                              test_dataset=test_dataset, test_corrupt_rate=Test_Corrupt_rate)
             network = net_list[participant_index]
             network = nn.DataParallel(network, device_ids=device_ids).to(device)
             accuracy = evaluate_network(network=network, dataloader=test_dl, logger=logger)
@@ -214,21 +203,16 @@ if __name__ =='__main__':
                     logits_aug1, dim=1), F.softmax(
                     logits_aug2, dim=1)
                 plog_clean = p_clean.log()
-                linear_output_target_list.append(p_clean.clone().detach())
+                linear_output_target_list.append(p_clean.detach())
                 linear_output_list.append(plog_clean)
                 participant_kl = 1 / (F.kl_div(p_aug1.log(), p_clean, reduction='batchmean') + F.kl_div(p_aug2.log(), p_clean, reduction='batchmean'))
-
-                # p_mixture = torch.clamp((p_clean + p_aug1 + p_aug2) / 3., 1e-7, 1).log()
-                # participant_kl = 1 / (F.kl_div(p_mixture, p_clean, reduction='batchmean') +
-                #             F.kl_div(p_mixture, p_aug1, reduction='batchmean') +
-                #             F.kl_div(p_mixture, p_aug2, reduction='batchmean')) / 3.
-                participant_kl_list.append(participant_kl.clone().detach())
+                participant_kl_list.append(participant_kl.cpu().clone().detach())
 
             #归一化
             participant_weight_list = []
             kl_sum = sum(participant_kl_list)
             for participant_index in range(N_Participants):
-                participant_weight_list.append(participant_kl_list[participant_index] / kl_sum)
+                participant_weight_list.append(participant_kl_list[participant_index] / (kl_sum + 1e-7))
 
             '''
             Update Participants' Models via KL Loss and Data Quality
@@ -248,7 +232,10 @@ if __name__ =='__main__':
                         weight_index = participant_weight_list[i]
                         # # for solo HFL
                         # weight_index = 1 / (N_Participants - 1)
-                        loss_batch_sample = criterion(linear_output_list[participant_index], linear_output_target_list[i])
+                        logits_ref = torch.clamp(linear_output_list[participant_index], min=1e-7, max=1.0)
+                        logits_target = torch.clamp(linear_output_target_list[i], min=1e-7, max=1.0)
+                        loss_batch_sample = criterion(logits_ref, logits_target)
+                        # loss_batch_sample = criterion(linear_output_list[participant_index], linear_output_target_list[i])
                         temp = weight_index * loss_batch_sample
                         loss = loss + temp
                 kl_loss_batch_list.append(loss.item())
@@ -268,8 +255,8 @@ if __name__ =='__main__':
             train_dl_local, _, train_ds_local, _ = get_augmix_private_dataloader(dataset=Private_Dataset_Name, datadir=Private_Dataset_Dir,
                                                                   train_bs=TrainBatchSize, test_bs=TestBatchSize,
                                                                   dataidxs=private_dataidx, corrupt_type=Corruption_Type,
-                                                                  corrupt_rate=Corrupt_rate, test_dataset=test_dataset,
-                                                                  test_corruption_type=Test_Corruption_Type, test_corrupt_rate=Test_Corrupt_rate)
+                                                                  corrupt_rate=Corrupt_rate, test_dataset=test_dataset, 
+                                                                  test_corrupt_rate=Test_Corrupt_rate)
             private_epoch = max(int(len(public_train_ds)/len(train_ds_local)),1)
 
             network,private_loss_batch_list = update_model_via_private_data(network=network,private_epoch=private_epoch,
@@ -291,8 +278,7 @@ if __name__ =='__main__':
                                                   train_bs=TrainBatchSize,
                                                   test_bs=TestBatchSize, dataidxs=None,
                                                   corrupt_type=Corruption_Type, corrupt_rate=Corrupt_rate,
-                                                  test_dataset=test_dataset, test_corruption_type=Test_Corruption_Type,
-                                                  test_corrupt_rate=Test_Corrupt_rate)
+                                                  test_dataset=test_dataset, test_corrupt_rate=Test_Corrupt_rate)
                 network = net_list[participant_index]
                 network = nn.DataParallel(network, device_ids=device_ids).to(device)
                 accuracy = evaluate_network(network=network, dataloader=test_dl, logger=logger)
@@ -301,21 +287,7 @@ if __name__ =='__main__':
             accuracy_avg = sum(acc_epoch_list) / N_Participants
 
         if epoch_index % 5 == 0 or epoch_index==CommunicationEpoch-1:
-            mkdirs('./test/Performance_Analysis/' + Corruption_Type + '_' + str(Corrupt_rate))
             mkdirs('./test/Model_Storage/' + Corruption_Type + '_' + str(Corrupt_rate)+ '_' + Pariticpant_Params['loss_funnction'])
-
-            logger.info('Save Loss')
-            col_loss_array = np.array(col_loss_list)
-            np.save('./test/Performance_Analysis/' + Corruption_Type + '_' + str(Corrupt_rate)
-                    +'/collaborative_loss.npy', col_loss_array)
-            local_loss_array = np.array(local_loss_list)
-            np.save('./test/Performance_Analysis/' + Corruption_Type + '_' + str(Corrupt_rate)
-                    +'/local_loss.npy', local_loss_array)
-            logger.info('Save Acc')
-            acc_array = np.array(acc_list)
-            np.save('./test/Performance_Analysis/' + Corruption_Type + '_' + str(Corrupt_rate)
-                    +'/acc.npy', acc_array)
-
             logger.info('Save Models')
             for participant_index in range(N_Participants):
                 netname = Private_Nets_Name_List[participant_index]
@@ -323,33 +295,3 @@ if __name__ =='__main__':
                 network = nn.DataParallel(network, device_ids=device_ids).to(device)
                 torch.save(network.state_dict(),
                            './test/Model_Storage/' + Corruption_Type + '_' + str(Corrupt_rate) + '_' + Pariticpant_Params['loss_funnction']+ '/' + netname + '_' +str(participant_index)+'.ckpt')
-
-        # if epoch_index % 5 == 0 or epoch_index==CommunicationEpoch-1:
-        #     mkdirs('./test/Performance_Analysis/'+Pariticpant_Params['loss_funnction'])
-        #     mkdirs('./test/Model_Storage/' +Pariticpant_Params['loss_funnction'])
-        #     mkdirs('./test/Performance_Analysis/'+Pariticpant_Params['loss_funnction']+str(Noise_type))
-        #     mkdirs('./test/Model_Storage/'+Pariticpant_Params['loss_funnction']+str(Noise_type))
-        #     mkdirs('./test/Performance_Analysis/'+Pariticpant_Params['loss_funnction']+'/'+str(Noise_type)+str(Noise_rate))
-        #     mkdirs('./test/Model_Storage/' +Pariticpant_Params['loss_funnction']+'/'+str(Noise_type)+ str(Noise_rate))
-        #
-        #     logger.info('Save Loss')
-        #     col_loss_array = np.array(col_loss_list)
-        #     np.save('./test/Performance_Analysis/' +Pariticpant_Params['loss_funnction']+'/'+ str(Noise_type) +str(Noise_rate)
-        #             +'/collaborative_loss.npy', col_loss_array)
-        #     local_loss_array = np.array(local_loss_list)
-        #     np.save('./test/Performance_Analysis/'+Pariticpant_Params['loss_funnction']+'/'+str(Noise_type) +str(Noise_rate)
-        #             +'/local_loss.npy', local_loss_array)
-        #     logger.info('Save Acc')
-        #     acc_array = np.array(acc_list)
-        #     np.save('./test/Performance_Analysis/' +Pariticpant_Params['loss_funnction']+'/'+ str(Noise_type) +str(Noise_rate)
-        #             +'/acc.npy', acc_array)
-        #
-        #     logger.info('Save Models')
-        #     for participant_index in range(N_Participants):
-        #         netname = Private_Nets_Name_List[participant_index]
-        #         network = net_list[participant_index]
-        #         network = nn.DataParallel(network, device_ids=device_ids).to(device)
-        #         torch.save(network.state_dict(),
-        #                    './test/Model_Storage/' +Pariticpant_Params['loss_funnction']+'/'+ str(Noise_type) + str(Noise_rate) + '/'
-        #                    + netname + '_' + str(participant_index) + '.ckpt')
-
